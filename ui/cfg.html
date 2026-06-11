@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API to MCP — Token 管理</title>
+<style>
+:root {
+  --bg: #0d1117; --surface: #161b22; --border: #30363d;
+  --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff;
+  --success: #3fb950; --danger: #f85149; --warn: #d29922;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+/* Buttons */
+.btn { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font-size:13px; cursor:pointer; transition:all .15s; }
+.btn:hover { border-color:var(--text-dim); }
+.btn-primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+.btn-primary:hover { opacity:.85; }
+.btn-sm { padding:4px 10px; font-size:12px; }
+.btn-danger { color:var(--danger); border-color:var(--danger); }
+.btn-danger:hover { background:var(--danger); color:#fff; }
+.btn-success { color:var(--success); border-color:var(--success); }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* Forms */
+.form-group { margin-bottom:14px; }
+.form-group label { display:block; font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.5px; }
+.form-group input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; font-family:inherit; }
+.form-group input:focus { outline:none; border-color:var(--primary); }
+
+/* Login View */
+.login-view { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px; }
+.login-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:32px; width:100%; max-width:380px; }
+.login-card h1 { font-size:18px; font-weight:600; text-align:center; margin-bottom:24px; }
+.login-card h1 span { color:var(--primary); }
+.login-error { color:var(--danger); font-size:12px; text-align:center; margin-top:8px; min-height:16px; }
+
+/* Dashboard View */
+.dash-view { display:none; }
+.header { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 16px; position:sticky; top:0; z-index:10; }
+.header-inner { max-width:960px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:16px; font-weight:600; }
+
+.container { max-width:960px; margin:0 auto; padding:16px; }
+
+/* Summary cards */
+.summary { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.summary-card { flex:1; min-width:140px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; text-align:center; }
+.summary-card .num { font-size:28px; font-weight:700; color:var(--primary); }
+.summary-card .num.green { color:var(--success); }
+.summary-card .num.yellow { color:var(--warn); }
+.summary-card .label { font-size:12px; color:var(--text-dim); margin-top:4px; }
+
+/* Toolbar */
+.toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+.toolbar h2 { font-size:15px; font-weight:600; }
+
+/* Table */
+.token-table { width:100%; border-collapse:collapse; font-size:13px; background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.token-table th { text-align:left; padding:10px 12px; background:var(--bg); color:var(--text-dim); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); }
+.token-table td { padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.token-table tr:last-child td { border-bottom:none; }
+.token-table tr:hover td { background:rgba(255,255,255,.02); }
+
+/* Token value */
+.token-val { font-family:monospace; font-size:12px; color:var(--text-dim); cursor:pointer; user-select:none; }
+.token-val:hover { color:var(--primary); }
+.token-full { font-family:monospace; font-size:12px; word-break:break-all; color:var(--text); }
+
+/* Badges */
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.badge-active { background:#23863633; color:var(--success); }
+.badge-inactive { background:var(--border); color:var(--text-dim); }
+
+/* Actions */
+.actions { display:flex; gap:4px; flex-wrap:nowrap; }
+
+/* Toast */
+.toast { position:fixed; bottom:20px; right:20px; padding:10px 18px; border-radius:8px; font-size:13px; z-index:200; animation:slideIn .2s ease; }
+.toast-success { background:var(--success); color:#000; }
+.toast-error { background:var(--danger); color:#fff; }
+@keyframes slideIn { from { transform:translateX(100px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+
+/* Modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:100; padding:16px; }
+.modal-overlay.active { display:flex; }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:12px; width:100%; max-width:420px; }
+.modal-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.modal-header h2 { font-size:16px; font-weight:600; }
+.modal-close { background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; padding:0 4px; }
+.modal-body { padding:20px; }
+.modal-footer { padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+
+/* Responsive */
+@media (max-width:640px) {
+  .summary { flex-direction:column; }
+  .token-table { font-size:12px; }
+  .token-table th, .token-table td { padding:8px 8px; }
+  .actions { flex-direction:column; gap:2px; }
+  .hide-mobile { display:none; }
+}
+</style>
+</head>
+<body>
+
+<!-- Login View -->
+<div class="login-view" id="loginView">
+  <div class="login-card">
+    <h1><span>⚡</span> API to MCP — Token 管理</h1>
+    <div class="form-group">
+      <label>用户名</label>
+      <input id="loginUser" value="admin" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input id="loginPass" type="password" placeholder="输入密码" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:8px;" onclick="doLogin()">登 录</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- Dashboard View -->
+<div class="dash-view" id="dashView">
+  <div class="header">
+    <div class="header-inner">
+      <h1>⚡ Token 管理</h1>
+      <button class="btn btn-sm" onclick="doLogout()">退出登录</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="summary" id="summary"></div>
+    <div class="toolbar">
+      <h2>Token 列表</h2>
+      <button class="btn btn-primary btn-sm" onclick="openCreateModal()">＋ 创建新 Token</button>
+    </div>
+    <div id="tokenList"></div>
+  </div>
+</div>
+
+<!-- Create Token Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>创建新 Token</h2>
+      <button class="modal-close" onclick="closeModal('createModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>名称</label>
+        <input id="newTokenName" placeholder="例如: production-key">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('createModal')">取消</button>
+      <button class="btn btn-primary" onclick="createToken()">创建</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let session = localStorage.getItem('mcp_session') || '';
+let tokens = [];
+
+// ── Helpers ────────────────────────────────────────────────────────
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+function maskToken(t) {
+  if (!t || t.length < 8) return t || '';
+  return t.slice(0, 6) + '...' + t.slice(-4);
+}
+
+function fmtDate(d) {
+  if (!d) return '从未';
+  return new Date(d).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+async function api(path, body) {
+  const opts = { method:'POST', headers:{ 'Content-Type':'application/json' } };
+  if (session) opts.headers['X-Session'] = session;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API}${path}`, opts);
+  return res.json();
+}
+
+async function apiGet(path) {
+  const opts = { headers:{} };
+  if (session) opts.headers['X-Session'] = session;
+  const res = await fetch(`${API}${path}`, opts);
+  return res.json();
+}
+
+// ── Login / Logout ─────────────────────────────────────────────────
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+
+  try {
+    const data = await api('/api/tokens/login', { username, password });
+    if (data.error) { errEl.textContent = data.error; return; }
+    session = data.session || data.token || '';
+    localStorage.setItem('mcp_session', session);
+    showDashboard();
+  } catch (e) {
+    errEl.textContent = '连接失败，请检查服务是否运行';
+  }
+}
+
+function doLogout() {
+  session = '';
+  localStorage.removeItem('mcp_session');
+  document.getElementById('loginView').style.display = 'flex';
+  document.getElementById('dashView').style.display = 'none';
+  document.getElementById('loginPass').value = '';
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────
+async function showDashboard() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('dashView').style.display = 'block';
+  await loadTokens();
+}
+
+async function loadTokens() {
+  try {
+    const data = await apiGet('/api/tokens/list');
+    tokens = data.tokens || data || [];
+    if (!Array.isArray(tokens)) tokens = [];
+  } catch { tokens = []; }
+  renderSummary();
+  renderTable();
+}
+
+function renderSummary() {
+  const total = tokens.length;
+  const active = tokens.filter(t => t.active).length;
+  const calls = tokens.reduce((s, t) => s + (t.usage_count || 0), 0);
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-card"><div class="num">${total}</div><div class="label">Token 总数</div></div>
+    <div class="summary-card"><div class="num green">${active}</div><div class="label">活跃 Token</div></div>
+    <div class="summary-card"><div class="num yellow">${calls}</div><div class="label">总调用次数</div></div>
+  `;
+}
+
+function renderTable() {
+  if (!tokens.length) {
+    document.getElementById('tokenList').innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px 0;">暂无 Token，点击上方按钮创建</p>';
+    return;
+  }
+  const rows = tokens.map((t, i) => {
+    const badge = t.active
+      ? '<span class="badge badge-active">Active</span>'
+      : '<span class="badge badge-inactive">Inactive</span>';
+    const toggleBtn = t.active
+      ? `<button class="btn btn-sm btn-danger" onclick="toggleToken(${i},false)">禁用</button>`
+      : `<button class="btn btn-sm btn-success" onclick="toggleToken(${i},true)">启用</button>`;
+    return `<tr>
+      <td>${esc(t.name || '-')}</td>
+      <td><span class="token-val" onclick="revealToken(${i},this)" title="点击查看完整 Token">${esc(maskToken(t.token))}</span></td>
+      <td class="hide-mobile">${fmtDate(t.created_at)}</td>
+      <td class="hide-mobile">${fmtDate(t.last_used_at)}</td>
+      <td>${t.usage_count || 0}</td>
+      <td>${badge}</td>
+      <td><div class="actions">
+        ${toggleBtn}
+        <button class="btn btn-sm" onclick="copyToken(${i})">复制</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteToken(${i})">删除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tokenList').innerHTML = `
+    <table class="token-table">
+      <thead><tr>
+        <th>名称</th><th>Token</th><th class="hide-mobile">创建时间</th>
+        <th class="hide-mobile">最后使用</th><th>调用次数</th><th>状态</th><th>操作</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Token Actions ──────────────────────────────────────────────────
+function revealToken(i, el) {
+  const t = tokens[i];
+  if (!t || !t.token) return;
+  const parent = el.parentElement;
+  if (parent.querySelector('.token-full')) {
+    parent.querySelector('.token-full').remove();
+    return;
+  }
+  const full = document.createElement('div');
+  full.className = 'token-full';
+  full.innerHTML = `${esc(t.token)} <button class="btn btn-sm" style="margin-left:6px;" onclick="navigator.clipboard.writeText('${esc(t.token)}');toast('已复制','success')">复制</button>`;
+  parent.appendChild(full);
+}
+
+function copyToken(i) {
+  const t = tokens[i];
+  if (!t || !t.token) return;
+  navigator.clipboard.writeText(t.token).then(() => toast('Token 已复制', 'success'));
+}
+
+async function toggleToken(i, active) {
+  const t = tokens[i];
+  try {
+    const data = await api('/api/tokens/toggle', { token_id: t.id || t.token_id, active });
+    if (data.error) { toast(data.error, 'error'); return; }
+    toast(active ? 'Token 已启用' : 'Token 已禁用', 'success');
+    await loadTokens();
+  } catch { toast('操作失败', 'error'); }
+}
+
+async function deleteToken(i) {
+  const t = tokens[i];
+  if (!confirm(`删除 Token "${t.name || t.token}"？此操作不可恢复。`)) return;
+  try {
+    const data = await api('/api/tokens/delete', { token_id: t.id || t.token_id });
+    if (data.error) { toast(data.error, 'error'); return; }
+    toast('Token 已删除', 'success');
+    await loadTokens();
+  } catch { toast('删除失败', 'error'); }
+}
+
+// ── Create Token ───────────────────────────────────────────────────
+function openCreateModal() {
+  document.getElementById('newTokenName').value = '';
+  openModal('createModal');
+}
+
+async function createToken() {
+  const name = document.getElementById('newTokenName').value.trim();
+  if (!name) { toast('请输入名称', 'error'); return; }
+  try {
+    const data = await api('/api/tokens/create', { name });
+    if (data.error) { toast(data.error, 'error'); return; }
+    closeModal('createModal');
+    toast('Token 创建成功', 'success');
+    await loadTokens();
+  } catch { toast('创建失败', 'error'); }
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+(async function init() {
+  if (session) {
+    try {
+      await loadTokens();
+      if (tokens.length >= 0) { showDashboard(); return; }
+    } catch {}
+  }
+  document.getElementById('loginView').style.display = 'flex';
+  document.getElementById('dashView').style.display = 'none';
+})();
+</script>
+</body>
+</html>

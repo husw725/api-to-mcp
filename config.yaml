@@ -1,0 +1,31 @@
+services:
+- name: github-api
+  base_url: https://api.github.com
+  headers: {}
+  endpoints:
+  - name: github_zen
+    method: GET
+    path: /zen
+    description: Get a GitHub API zen quote
+    parameters: []
+    verified: true
+  - name: github_user
+    method: GET
+    path: /users/{username}
+    description: Get GitHub user profile
+    parameters:
+    - name: username
+      type: string
+      required: true
+      location: path
+    verified: true
+- name: weather
+  base_url: https://qweather.com
+  headers: {}
+  endpoints:
+  - name: hangzhou
+    method: GET
+    path: /?hid=yuhang-101210106
+    description: ''
+    parameters: []
+    verified: true
