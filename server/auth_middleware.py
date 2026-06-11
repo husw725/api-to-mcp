@@ -5,22 +5,22 @@ from starlette.responses import JSONResponse
 
 from .tokens import validate_token, is_valid_session
 
-# Completely public — no auth at all
-PUBLIC_PATHS = ("/cfg", "/api/tokens/login")
+# Completely public — no auth at all (HTML pages)
+PUBLIC_PATHS = ("/cfg", "/ui", "/admin", "/api/tokens/login")
 
 # Admin endpoints — protected by session (set via /api/tokens/login)
 ADMIN_PREFIX = "/api/tokens/"
 
-# Admin-managed paths — also protected by session
-ADMIN_PATHS = ("/ui", "/api/config", "/api/test", "/api/tools", "/api/health")
+# Admin-managed API paths — protected by session
+ADMIN_API_PATHS = ("/api/config", "/api/test", "/api/tools", "/api/health")
 
 
 class AuthMiddleware:
     """Three-tier auth:
 
-    - /cfg, /api/tokens/login → open (login entry point)
+    - /cfg, /ui, /api/tokens/login → open (HTML pages + login entry)
     - /api/tokens/* → admin session (X-Session header)
-    - /ui, /api/config, /api/test, /api/tools, /api/health → admin session (X-Session header)
+    - /api/config, /api/test, /api/tools, /api/health → admin session
     - /mcp → Bearer token
     """
 
@@ -63,7 +63,7 @@ class AuthMiddleware:
             return
 
         # Admin managed — check session
-        if path in ADMIN_PATHS or path.startswith(ADMIN_PREFIX):
+        if path in ADMIN_API_PATHS or path.startswith(ADMIN_PREFIX):
             session_id = request.headers.get("x-session", "")
             if not session_id or not is_valid_session(session_id):
                 response = JSONResponse(

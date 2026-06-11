@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API to MCP — 管理中心</title>
+<style>
+:root {
+  --bg: #0d1117; --surface: #161b22; --border: #30363d;
+  --text: #c9d1d9; --text-dim: #8b949e; --primary: #58a6ff;
+  --success: #3fb950; --danger: #f85149; --warn: #d29922;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+a { color:var(--primary); text-decoration:none; }
+
+/* Header */
+.header { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 16px; position:sticky; top:0; z-index:10; }
+.header-inner { max-width:960px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.header h1 { font-size:16px; font-weight:600; }
+.header-stats { display:flex; gap:12px; font-size:12px; color:var(--text-dim); }
+.header-stats span { display:flex; align-items:center; gap:4px; }
+.header-stats .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.dot-green { background:var(--success); }
+.dot-gray { background:var(--text-dim); }
+
+/* Tab Navigation */
+.tab-nav { display:flex; gap:0; margin-left:16px; }
+.tab-btn { padding:6px 16px; font-size:13px; font-weight:600; color:var(--text-dim); background:none; border:1px solid var(--border); border-bottom:none; border-radius:6px 6px 0 0; cursor:pointer; transition:all .15s; }
+.tab-btn:hover { color:var(--text); }
+.tab-btn.active { color:var(--primary); background:var(--surface); border-color:var(--primary); position:relative; z-index:1; }
+.tab-bar { border-bottom:1px solid var(--primary); margin-top:-1px; }
+
+/* Layout */
+.container { max-width:960px; margin:0 auto; padding:16px; }
+
+/* Buttons */
+.btn { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font-size:13px; cursor:pointer; transition: all .15s; }
+.btn:hover { border-color:var(--text-dim); }
+.btn-primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+.btn-primary:hover { opacity:.85; }
+.btn-sm { padding:4px 10px; font-size:12px; }
+.btn-danger { color:var(--danger); border-color:var(--danger); }
+.btn-danger:hover { background:var(--danger); color:#fff; }
+.btn-success { color:var(--success); border-color:var(--success); }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* Cards */
+.service-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:12px; overflow:hidden; }
+.service-header { padding:12px 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+.service-header:hover { background:rgba(255,255,255,.03); }
+.service-name { font-weight:600; font-size:14px; }
+.service-url { font-size:12px; color:var(--text-dim); margin-top:2px; }
+.service-body { padding:0 16px 12px; border-top:1px solid var(--border); }
+.service-actions { display:flex; gap:6px; }
+
+/* Endpoint rows */
+.ep-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.ep-row:last-child { border-bottom:none; }
+.ep-method { font-size:11px; font-weight:700; padding:2px 6px; border-radius:3px; min-width:40px; text-align:center; }
+.m-GET { background:#1f6feb22; color:#58a6ff; }
+.m-POST { background:#23863622; color:#3fb950; }
+.m-PUT { background:#d2992222; color:#d29922; }
+.m-DELETE { background:#da363322; color:#f85149; }
+.m-PATCH { background:#8957e522; color:#a371f7; }
+.ep-path { color:var(--text-dim); font-family:monospace; font-size:12px; }
+.ep-name { font-weight:500; flex:1; }
+.ep-status { font-size:11px; padding:2px 8px; border-radius:10px; }
+.ep-verified { background:var(--success); color:#000; }
+.ep-unverified { background:var(--border); color:var(--text-dim); }
+.ep-actions { display:flex; gap:4px; }
+
+/* Modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:100; padding:16px; }
+.modal-overlay.active { display:flex; }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:12px; width:100%; max-width:560px; max-height:90vh; overflow-y:auto; }
+.modal-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.modal-header h2 { font-size:16px; font-weight:600; }
+.modal-close { background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; padding:0 4px; }
+.modal-body { padding:20px; }
+.modal-footer { padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+
+/* Forms */
+.form-group { margin-bottom:14px; }
+.form-group label { display:block; font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.5px; }
+.form-group input, .form-group select, .form-group textarea {
+  width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; font-family:inherit;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:var(--primary); }
+.form-group textarea { resize:vertical; min-height:60px; }
+.form-row { display:flex; gap:10px; }
+.form-row .form-group { flex:1; }
+
+/* Parameters */
+.params-container { margin-top:8px; }
+.param-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; font-size:13px; }
+.param-row input, .param-row select { padding:6px 8px; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text); font-size:12px; }
+.param-row .p-name { flex:2; }
+.param-row .p-type { flex:1; }
+.param-row .p-loc { flex:1; }
+.param-row .p-req { width:32px; }
+.param-row .p-del { background:none; border:none; color:var(--danger); cursor:pointer; font-size:16px; padding:4px; }
+
+/* Test result */
+.test-area { margin-top:12px; padding:12px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-family:monospace; font-size:12px; max-height:240px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; }
+.test-area.has-error { border-color:var(--danger); color:var(--danger); }
+.test-area.has-success { border-color:var(--success); }
+.test-btn-group { display:flex; gap:6px; margin-top:8px; }
+
+/* Empty state */
+.empty { text-align:center; padding:48px 16px; color:var(--text-dim); }
+.empty svg { margin-bottom:12px; opacity:.4; }
+
+/* Toast */
+.toast { position:fixed; bottom:20px; right:20px; padding:10px 18px; border-radius:8px; font-size:13px; z-index:200; animation: slideIn .2s ease; }
+.toast-success { background:var(--success); color:#000; }
+.toast-error { background:var(--danger); color:#fff; }
+@keyframes slideIn { from { transform:translateX(100px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+
+/* Login overlay */
+.login-overlay { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:300; padding:16px; }
+.login-overlay.hidden { display:none; }
+.login-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:32px; width:100%; max-width:360px; }
+.login-card h2 { font-size:18px; font-weight:600; text-align:center; margin-bottom:24px; }
+.login-card .form-group { margin-bottom:14px; }
+.login-card .form-group label { display:block; font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.5px; }
+.login-card .form-group input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; font-family:inherit; }
+.login-card .form-group input:focus { outline:none; border-color:var(--primary); }
+.login-card .btn-login { width:100%; padding:8px 14px; border:1px solid var(--primary); border-radius:6px; background:var(--primary); color:#fff; font-size:13px; font-weight:600; cursor:pointer; transition: all .15s; }
+.login-card .btn-login:hover { opacity:.85; }
+.login-card .btn-login:disabled { opacity:.4; cursor:not-allowed; }
+.login-error { color:var(--danger); font-size:12px; text-align:center; margin-top:10px; min-height:16px; }
+
+/* Logout button */
+.btn-logout { background:none; border:1px solid var(--border); border-radius:6px; color:var(--text-dim); font-size:12px; padding:4px 10px; cursor:pointer; transition: all .15s; }
+.btn-logout:hover { border-color:var(--danger); color:var(--danger); }
+
+/* ── Token Tab Styles ── */
+/* Summary cards */
+.summary { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.summary-card { flex:1; min-width:140px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; text-align:center; }
+.summary-card .num { font-size:28px; font-weight:700; color:var(--primary); }
+.summary-card .num.green { color:var(--success); }
+.summary-card .num.yellow { color:var(--warn); }
+.summary-card .label { font-size:12px; color:var(--text-dim); margin-top:4px; }
+
+/* Toolbar */
+.toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+.toolbar h2 { font-size:15px; font-weight:600; }
+
+/* Table */
+.token-table { width:100%; border-collapse:collapse; font-size:13px; background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.token-table th { text-align:left; padding:10px 12px; background:var(--bg); color:var(--text-dim); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); }
+.token-table td { padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.token-table tr:last-child td { border-bottom:none; }
+.token-table tr:hover td { background:rgba(255,255,255,.02); }
+
+/* Token value */
+.token-val { font-family:monospace; font-size:12px; color:var(--text-dim); cursor:pointer; user-select:none; }
+.token-val:hover { color:var(--primary); }
+.token-full { font-family:monospace; font-size:12px; word-break:break-all; color:var(--text); }
+
+/* Badges */
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.badge-active { background:#23863633; color:var(--success); }
+.badge-inactive { background:var(--border); color:var(--text-dim); }
+
+/* Actions */
+.actions { display:flex; gap:4px; flex-wrap:nowrap; }
+
+/* Tab content */
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+
+/* Responsive */
+@media (max-width:640px) {
+  .form-row { flex-direction:column; gap:0; }
+  .header-stats { font-size:11px; }
+  .modal { margin:8px; }
+  .summary { flex-direction:column; }
+  .token-table { font-size:12px; }
+  .token-table th, .token-table td { padding:8px 8px; }
+  .actions { flex-direction:column; gap:2px; }
+  .hide-mobile { display:none; }
+  .tab-btn { padding:6px 10px; font-size:12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <h2>⚡ API to MCP</h2>
+    <div class="form-group">
+      <label>用户名</label>
+      <input id="loginUser" placeholder="admin" value="admin">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input id="loginPass" type="password" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">登 录</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="header">
+  <div class="header-inner">
+    <div style="display:flex;align-items:center;gap:0;">
+      <h1>⚡ API to MCP</h1>
+      <div class="tab-nav">
+        <button class="tab-btn active" id="tabConfig" onclick="switchTab('config')">配置管理</button>
+        <button class="tab-btn" id="tabToken" onclick="switchTab('token')">Token 管理</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <div class="header-stats" id="headerStats">
+        <span><span class="dot dot-green" id="statusDot"></span> <span id="statusText">连接中...</span></span>
+        <span>🔧 <span id="toolCount">0</span> tools</span>
+      </div>
+      <button class="btn btn-primary btn-sm" id="addServiceBtn" onclick="openServiceModal()">+ 添加服务</button>
+      <button class="btn-logout" onclick="doLogout()">退出</button>
+    </div>
+  </div>
+  <div class="tab-bar"></div>
+</div>
+
+<!-- ═══ Tab 1: 配置管理 ═══ -->
+<div class="tab-content active" id="tabContentConfig">
+  <div class="container" id="app">
+    <div class="empty" id="emptyState">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <p>还没有配置任何服务</p>
+      <p style="margin-top:4px;font-size:12px;">点击"+ 添加服务"开始配置 API 端点</p>
+    </div>
+    <div id="serviceList"></div>
+  </div>
+</div>
+
+<!-- ═══ Tab 2: Token 管理 ═══ -->
+<div class="tab-content" id="tabContentToken">
+  <div class="container">
+    <div class="summary" id="summary"></div>
+    <div class="toolbar">
+      <h2>Token 列表</h2>
+      <button class="btn btn-primary btn-sm" onclick="openCreateModal()">＋ 创建新 Token</button>
+    </div>
+    <div id="tokenList"></div>
+  </div>
+</div>
+
+<!-- Service Modal -->
+<div class="modal-overlay" id="serviceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="serviceModalTitle">添加服务</h2>
+      <button class="modal-close" onclick="closeModal('serviceModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="svcEditIdx">
+      <div class="form-group">
+        <label>服务名称</label>
+        <input id="svcName" placeholder="例如: user-service">
+      </div>
+      <div class="form-group">
+        <label>Base URL</label>
+        <input id="svcBaseUrl" placeholder="http://192.168.1.100:8080/api">
+      </div>
+      <div class="form-group">
+        <label>Headers (JSON)</label>
+        <textarea id="svcHeaders" placeholder='{"Authorization": "Bearer xxx"}'></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('serviceModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveService()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Endpoint Modal -->
+<div class="modal-overlay" id="endpointModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="endpointModalTitle">添加端点</h2>
+      <button class="modal-close" onclick="closeModal('endpointModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="epSvcIdx">
+      <input type="hidden" id="epEditIdx">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tool 名称</label>
+          <input id="epName" placeholder="get_user">
+        </div>
+        <div class="form-group" style="flex:0 0 100px;">
+          <label>方法</label>
+          <select id="epMethod">
+            <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>路径</label>
+        <input id="epPath" placeholder="/users/{user_id}">
+      </div>
+      <div class="form-group">
+        <label>描述 (给 AI 看的)</label>
+        <textarea id="epDesc" placeholder="根据用户ID获取用户信息"></textarea>
+      </div>
+      <div class="form-group">
+        <label>参数</label>
+        <div class="params-container" id="epParams"></div>
+        <button class="btn btn-sm" onclick="addParamRow()" style="margin-top:4px;">+ 添加参数</button>
+      </div>
+
+      <!-- Test area -->
+      <div class="form-group" style="margin-top:18px;">
+        <label>测试</label>
+        <div class="test-btn-group">
+          <button class="btn btn-sm btn-success" id="testBtn" onclick="testEndpoint()">▶ 发送测试请求</button>
+          <button class="btn btn-sm" onclick="fillTestBody()" style="display:none;">自动填充路径参数</button>
+        </div>
+        <div class="test-area" id="testResult" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('endpointModal')">取消</button>
+      <button class="btn btn-primary" id="saveEpBtn" onclick="saveEndpoint()">✅ 测试通过 → 添加到 MCP</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Token Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>创建新 Token</h2>
+      <button class="modal-close" onclick="closeModal('createModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>名称</label>
+        <input id="newTokenName" placeholder="例如: production-key">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('createModal')">取消</button>
+      <button class="btn btn-primary" onclick="createToken()">创建</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let config = { services: [] };
+let testPassed = false;
+let tokens = [];
+let currentTab = 'config';
+let tokenTabLoaded = false;
+
+// ── Session / Auth ────────────────────────────────────────────────
+function getSession() { return localStorage.getItem('mcp_session'); }
+
+function sessionHeaders(extra = {}) {
+  const s = getSession();
+  if (s) extra['X-Session'] = s;
+  return extra;
+}
+
+function showLogin() { document.getElementById('loginOverlay').classList.remove('hidden'); }
+function hideLogin() { document.getElementById('loginOverlay').classList.add('hidden'); }
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  if (!username || !password) { errEl.textContent = '请输入用户名和密码'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  errEl.textContent = '';
+
+  try {
+    const res = await fetch(`${API}/api/tokens/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      errEl.textContent = data.error || '登录失败';
+      btn.disabled = false;
+      btn.textContent = '登 录';
+      return;
+    }
+    localStorage.setItem('mcp_session', data.session_id || data.token || data.session);
+    hideLogin();
+    init();
+  } catch (e) {
+    errEl.textContent = '连接失败: ' + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '登 录';
+}
+
+function doLogout() {
+  localStorage.removeItem('mcp_session');
+  showLogin();
+  config = { services: [] };
+  tokens = [];
+  tokenTabLoaded = false;
+  render();
+}
+
+// ── Tab Navigation ────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tabConfig').classList.toggle('active', tab === 'config');
+  document.getElementById('tabToken').classList.toggle('active', tab === 'token');
+  document.getElementById('tabContentConfig').classList.toggle('active', tab === 'config');
+  document.getElementById('tabContentToken').classList.toggle('active', tab === 'token');
+  // Show/hide config-specific header elements
+  document.getElementById('headerStats').style.display = tab === 'config' ? 'flex' : 'none';
+  document.getElementById('addServiceBtn').style.display = tab === 'config' ? 'inline-flex' : 'none';
+  // Lazy-load token data on first switch
+  if (tab === 'token' && !tokenTabLoaded && getSession()) {
+    loadTokens();
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+async function init() {
+  if (!getSession()) { showLogin(); return; }
+  hideLogin();
+  await loadConfig();
+  await checkHealth();
+  render();
+  setInterval(checkHealth, 10000);
+}
+
+async function loadConfig() {
+  const res = await fetch(`${API}/api/config`, { headers: sessionHeaders() });
+  if (res.status === 401) { doLogout(); return; }
+  config = await res.json();
+}
+
+async function checkHealth() {
+  try {
+    const res = await fetch(`${API}/api/health`, { headers: sessionHeaders() });
+    if (res.status === 401) { doLogout(); return; }
+    const d = await res.json();
+    document.getElementById('statusText').textContent = '运行中';
+    document.getElementById('toolCount').textContent = d.tools_count || 0;
+  } catch {
+    document.getElementById('statusText').textContent = '连接失败';
+    document.getElementById('statusDot').className = 'dot dot-gray';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ══ Tab 1: 配置管理 (from index.html) ════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+
+// ── Render ────────────────────────────────────────────────────────
+function render() {
+  const list = document.getElementById('serviceList');
+  const empty = document.getElementById('emptyState');
+  if (!config.services.length) {
+    empty.style.display = 'block';
+    list.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = config.services.map((svc, si) => `
+    <div class="service-card">
+      <div class="service-header" onclick="toggleService(${si})">
+        <div>
+          <div class="service-name">${esc(svc.name)}</div>
+          <div class="service-url">${esc(svc.base_url)}</div>
+        </div>
+        <div class="service-actions" onclick="event.stopPropagation()">
+          <button class="btn btn-sm" onclick="openEndpointModal(${si})">+ 端点</button>
+          <button class="btn btn-sm" onclick="editService(${si})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteService(${si})">🗑️</button>
+        </div>
+      </div>
+      <div class="service-body" id="svc-body-${si}" style="display:none;">
+        ${(svc.endpoints || []).map((ep, ei) => renderEp(ep, si, ei)).join('') || '<p style="font-size:12px;color:var(--text-dim);">暂无端点</p>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderEp(ep, si, ei) {
+  const verified = ep.verified ? '<span class="ep-status ep-verified">已验证</span>' : '<span class="ep-status ep-unverified">未验证</span>';
+  return `
+    <div class="ep-row">
+      <span class="ep-method m-${ep.method}">${ep.method}</span>
+      <span class="ep-name">${esc(ep.name)}</span>
+      <span class="ep-path">${esc(ep.path)}</span>
+      ${verified}
+      <div class="ep-actions">
+        <button class="btn btn-sm" onclick="editEndpoint(${si},${ei})">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteEndpoint(${si},${ei})">🗑️</button>
+      </div>
+    </div>`;
+}
+
+function toggleService(si) {
+  const el = document.getElementById(`svc-body-${si}`);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ── Service CRUD ──────────────────────────────────────────────────
+function openServiceModal() {
+  document.getElementById('serviceModalTitle').textContent = '添加服务';
+  document.getElementById('svcEditIdx').value = '';
+  document.getElementById('svcName').value = '';
+  document.getElementById('svcBaseUrl').value = '';
+  document.getElementById('svcHeaders').value = '';
+  openModal('serviceModal');
+}
+
+function editService(si) {
+  const svc = config.services[si];
+  document.getElementById('serviceModalTitle').textContent = '编辑服务';
+  document.getElementById('svcEditIdx').value = si;
+  document.getElementById('svcName').value = svc.name;
+  document.getElementById('svcBaseUrl').value = svc.base_url;
+  document.getElementById('svcHeaders').value = svc.headers ? JSON.stringify(svc.headers, null, 2) : '';
+  openModal('serviceModal');
+}
+
+async function saveService() {
+  const name = document.getElementById('svcName').value.trim();
+  const base_url = document.getElementById('svcBaseUrl').value.trim();
+  if (!name || !base_url) { toast('请填写名称和Base URL', 'error'); return; }
+
+  let headers = {};
+  try {
+    const h = document.getElementById('svcHeaders').value.trim();
+    if (h) headers = JSON.parse(h);
+  } catch { toast('Headers JSON 格式错误', 'error'); return; }
+
+  const editIdx = document.getElementById('svcEditIdx').value;
+  const svc = { name, base_url, headers, endpoints: [] };
+
+  if (editIdx !== '') {
+    svc.endpoints = config.services[parseInt(editIdx)].endpoints;
+    config.services[parseInt(editIdx)] = svc;
+  } else {
+    config.services.push(svc);
+  }
+
+  await pushConfig();
+  closeModal('serviceModal');
+  render();
+}
+
+async function deleteService(si) {
+  if (!confirm(`删除服务 "${config.services[si].name}" 及其所有端点？`)) return;
+  config.services.splice(si, 1);
+  await pushConfig();
+  render();
+}
+
+// ── Endpoint CRUD ─────────────────────────────────────────────────
+function openEndpointModal(si) {
+  const svc = config.services[si];
+  document.getElementById('endpointModalTitle').textContent = `添加端点 — ${svc.name}`;
+  document.getElementById('epSvcIdx').value = si;
+  document.getElementById('epEditIdx').value = '';
+  document.getElementById('epName').value = '';
+  document.getElementById('epMethod').value = 'GET';
+  document.getElementById('epPath').value = '';
+  document.getElementById('epDesc').value = '';
+  document.getElementById('epParams').innerHTML = '';
+  document.getElementById('testResult').style.display = 'none';
+  testPassed = false;
+  updateSaveBtn();
+  openModal('endpointModal');
+}
+
+function editEndpoint(si, ei) {
+  const ep = config.services[si].endpoints[ei];
+  document.getElementById('endpointModalTitle').textContent = `编辑端点 — ${config.services[si].name}`;
+  document.getElementById('epSvcIdx').value = si;
+  document.getElementById('epEditIdx').value = ei;
+  document.getElementById('epName').value = ep.name;
+  document.getElementById('epMethod').value = ep.method;
+  document.getElementById('epPath').value = ep.path;
+  document.getElementById('epDesc').value = ep.description || '';
+  const pc = document.getElementById('epParams');
+  pc.innerHTML = '';
+  (ep.parameters || []).forEach(p => {
+    addParamRow(p.name, p.type, p.location, p.required);
+  });
+  document.getElementById('testResult').style.display = 'none';
+  testPassed = ep.verified || false;
+  updateSaveBtn();
+  openModal('endpointModal');
+}
+
+function addParamRow(name='', type='string', location='body', required=false) {
+  const pc = document.getElementById('epParams');
+  const row = document.createElement('div');
+  row.className = 'param-row';
+  row.innerHTML = `
+    <input class="p-name" placeholder="参数名" value="${esc(name)}">
+    <select class="p-type">
+      <option value="string" ${type==='string'?'selected':''}>string</option>
+      <option value="integer" ${type==='integer'?'selected':''}>integer</option>
+      <option value="number" ${type==='number'?'selected':''}>number</option>
+      <option value="boolean" ${type==='boolean'?'selected':''}>boolean</option>
+    </select>
+    <select class="p-loc">
+      <option value="body" ${location==='body'?'selected':''}>body</option>
+      <option value="query" ${location==='query'?'selected':''}>query</option>
+      <option value="path" ${location==='path'?'selected':''}>path</option>
+    </select>
+    <input type="checkbox" class="p-req" ${required?'checked':''} title="必填">
+    <button class="p-del" onclick="this.parentElement.remove()">×</button>
+  `;
+  pc.appendChild(row);
+}
+
+function getParams() {
+  const rows = document.querySelectorAll('#epParams .param-row');
+  const params = [];
+  rows.forEach(r => {
+    const inputs = r.querySelectorAll('input, select');
+    const name = inputs[0].value.trim();
+    if (!name) return;
+    params.push({
+      name,
+      type: inputs[1].value,
+      location: inputs[2].value,
+      required: inputs[3].checked,
+    });
+  });
+  return params;
+}
+
+async function testEndpoint() {
+  const svc = config.services[parseInt(document.getElementById('epSvcIdx').value)];
+  const method = document.getElementById('epMethod').value;
+  const path = document.getElementById('epPath').value.trim();
+  if (!path) { toast('请填写路径', 'error'); return; }
+
+  const params = getParams();
+  const btn = document.getElementById('testBtn');
+  const result = document.getElementById('testResult');
+
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  result.style.display = 'block';
+  result.className = 'test-area';
+  result.textContent = '正在发送请求...';
+
+  const body = {};
+  params.forEach(p => {
+    if (p.location === 'path') body[p.name] = `test_${p.name}`;
+    else if (p.location === 'body') body[p.name] = p.type === 'string' ? 'test' : p.type === 'integer' ? 1 : p.type === 'boolean' ? true : 1.0;
+  });
+
+  try {
+    const res = await fetch(`${API}/api/test`, {
+      method: 'POST',
+      headers: sessionHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        base_url: svc.base_url,
+        method,
+        path,
+        headers: svc.headers || {},
+        body,
+      }),
+    });
+    const data = await res.json();
+    if (res.status === 401) { doLogout(); return; }
+    result.textContent = JSON.stringify(data, null, 2);
+
+    if (data.error || (data.status_code && data.status_code >= 400)) {
+      result.className = 'test-area has-error';
+      toast('测试失败，请检查配置', 'error');
+      testPassed = false;
+    } else {
+      result.className = 'test-area has-success';
+      toast('✅ 测试通过！可以添加到 MCP', 'success');
+      testPassed = true;
+    }
+  } catch (e) {
+    result.className = 'test-area has-error';
+    result.textContent = `请求失败: ${e.message}`;
+    testPassed = false;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ 发送测试请求';
+  updateSaveBtn();
+}
+
+function fillTestBody() {
+  toast('已自动填充路径参数', 'success');
+}
+
+function updateSaveBtn() {
+  const btn = document.getElementById('saveEpBtn');
+  if (testPassed) {
+    btn.disabled = false;
+    btn.textContent = '✅ 测试通过 → 添加到 MCP';
+    btn.className = 'btn btn-primary';
+  } else {
+    btn.disabled = true;
+    btn.textContent = '🔒 请先测试通过';
+  }
+}
+
+async function saveEndpoint() {
+  if (!testPassed) { toast('请先通过测试', 'error'); return; }
+
+  const name = document.getElementById('epName').value.trim();
+  const method = document.getElementById('epMethod').value;
+  const path = document.getElementById('epPath').value.trim();
+  const description = document.getElementById('epDesc').value.trim();
+  const parameters = getParams();
+
+  if (!name || !path) { toast('请填写名称和路径', 'error'); return; }
+
+  const si = parseInt(document.getElementById('epSvcIdx').value);
+  const ei = document.getElementById('epEditIdx').value;
+
+  const ep = { name, method, path, description, parameters, verified: true };
+
+  if (ei !== '') {
+    config.services[si].endpoints[parseInt(ei)] = ep;
+  } else {
+    config.services[si].endpoints.push(ep);
+  }
+
+  await pushConfig();
+  closeModal('endpointModal');
+  render();
+  await checkHealth();
+}
+
+async function deleteEndpoint(si, ei) {
+  if (!confirm('删除此端点？')) return;
+  config.services[si].endpoints.splice(ei, 1);
+  await pushConfig();
+  render();
+}
+
+// ── Push config → server → reload MCP tools ──────────────────────
+async function pushConfig() {
+  const res = await fetch(`${API}/api/config`, {
+    method: 'POST',
+    headers: sessionHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(config),
+  });
+  if (res.status === 401) { doLogout(); return; }
+  if (!res.ok) toast('保存失败', 'error');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ══ Tab 2: Token 管理 (from cfg.html) ════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+
+async function apiPost(path, body) {
+  const opts = { method:'POST', headers: sessionHeaders({ 'Content-Type':'application/json' }) };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API}${path}`, opts);
+  if (res.status === 401) { doLogout(); return { error: 'Unauthorized' }; }
+  return res.json();
+}
+
+async function apiGet(path) {
+  const res = await fetch(`${API}${path}`, { headers: sessionHeaders() });
+  if (res.status === 401) { doLogout(); return { error: 'Unauthorized' }; }
+  return res.json();
+}
+
+async function loadTokens() {
+  try {
+    const data = await apiGet('/api/tokens/list');
+    if (data.error) { tokens = []; } else {
+      tokens = data.tokens || data || [];
+      if (!Array.isArray(tokens)) tokens = [];
+    }
+  } catch { tokens = []; }
+  tokenTabLoaded = true;
+  renderSummary();
+  renderTable();
+}
+
+function renderSummary() {
+  const total = tokens.length;
+  const active = tokens.filter(t => t.active).length;
+  const calls = tokens.reduce((s, t) => s + (t.usage_count || 0), 0);
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-card"><div class="num">${total}</div><div class="label">Token 总数</div></div>
+    <div class="summary-card"><div class="num green">${active}</div><div class="label">活跃 Token</div></div>
+    <div class="summary-card"><div class="num yellow">${calls}</div><div class="label">总调用次数</div></div>
+  `;
+}
+
+function renderTable() {
+  if (!tokens.length) {
+    document.getElementById('tokenList').innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:40px 0;">暂无 Token，点击上方按钮创建</p>';
+    return;
+  }
+  const rows = tokens.map((t, i) => {
+    const badge = t.active
+      ? '<span class="badge badge-active">Active</span>'
+      : '<span class="badge badge-inactive">Inactive</span>';
+    const toggleBtn = t.active
+      ? `<button class="btn btn-sm btn-danger" onclick="toggleToken(${i},false)">禁用</button>`
+      : `<button class="btn btn-sm btn-success" onclick="toggleToken(${i},true)">启用</button>`;
+    return `<tr>
+      <td>${esc(t.name || '-')}</td>
+      <td><span class="token-val" onclick="revealToken(${i},this)" title="点击查看完整 Token">${esc(maskToken(t.token))}</span></td>
+      <td class="hide-mobile">${fmtDate(t.created_at)}</td>
+      <td class="hide-mobile">${fmtDate(t.last_used_at)}</td>
+      <td>${t.usage_count || 0}</td>
+      <td>${badge}</td>
+      <td><div class="actions">
+        ${toggleBtn}
+        <button class="btn btn-sm" onclick="copyToken(${i})">复制</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteToken(${i})">删除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tokenList').innerHTML = `
+    <table class="token-table">
+      <thead><tr>
+        <th>名称</th><th>Token</th><th class="hide-mobile">创建时间</th>
+        <th class="hide-mobile">最后使用</th><th>调用次数</th><th>状态</th><th>操作</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function maskToken(t) {
+  if (!t || t.length < 8) return t || '';
+  return t.slice(0, 6) + '...' + t.slice(-4);
+}
+
+function fmtDate(d) {
+  if (!d) return '从未';
+  return new Date(d).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+// ── Token Actions ──────────────────────────────────────────────────
+function revealToken(i, el) {
+  const t = tokens[i];
+  if (!t || !t.token) return;
+  const parent = el.parentElement;
+  if (parent.querySelector('.token-full')) {
+    parent.querySelector('.token-full').remove();
+    return;
+  }
+  const full = document.createElement('div');
+  full.className = 'token-full';
+  full.innerHTML = `${esc(t.token)} <button class="btn btn-sm" style="margin-left:6px;" onclick="navigator.clipboard.writeText('${esc(t.token)}');toast('已复制','success')">复制</button>`;
+  parent.appendChild(full);
+}
+
+function copyToken(i) {
+  const t = tokens[i];
+  if (!t || !t.token) return;
+  navigator.clipboard.writeText(t.token).then(() => toast('Token 已复制', 'success'));
+}
+
+async function toggleToken(i, active) {
+  const t = tokens[i];
+  try {
+    const data = await apiPost('/api/tokens/toggle', { token_id: t.id || t.token_id, active });
+    if (data.error) { toast(data.error, 'error'); return; }
+    toast(active ? 'Token 已启用' : 'Token 已禁用', 'success');
+    await loadTokens();
+  } catch { toast('操作失败', 'error'); }
+}
+
+async function deleteToken(i) {
+  const t = tokens[i];
+  if (!confirm(`删除 Token "${t.name || t.token}"？此操作不可恢复。`)) return;
+  try {
+    const data = await apiPost('/api/tokens/delete', { token_id: t.id || t.token_id });
+    if (data.error) { toast(data.error, 'error'); return; }
+    toast('Token 已删除', 'success');
+    await loadTokens();
+  } catch { toast('删除失败', 'error'); }
+}
+
+// ── Create Token ───────────────────────────────────────────────────
+function openCreateModal() {
+  document.getElementById('newTokenName').value = '';
+  openModal('createModal');
+}
+
+async function createToken() {
+  const name = document.getElementById('newTokenName').value.trim();
+  if (!name) { toast('请输入名称', 'error'); return; }
+  try {
+    const data = await apiPost('/api/tokens/create', { name });
+    if (data.error) { toast(data.error, 'error'); return; }
+    closeModal('createModal');
+    toast('Token 创建成功', 'success');
+    await loadTokens();
+  } catch { toast('创建失败', 'error'); }
+}
+
+// ── Modal helpers ─────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+// ── Toast ─────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ── Escape ────────────────────────────────────────────────────────
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Go ────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

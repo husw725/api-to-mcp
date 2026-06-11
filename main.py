@@ -4,7 +4,6 @@ API to MCP — Turn REST API endpoints into MCP tools.
 Web UI: /ui (configure & test endpoints)
 MCP:    /mcp (Streamable HTTP transport)
 """
-
 import json
 import sys
 import asyncio
@@ -12,7 +11,7 @@ from pathlib import Path
 
 import yaml
 from starlette.requests import Request
-from starlette.responses import JSONResponse, FileResponse
+from starlette.responses import JSONResponse, FileResponse, RedirectResponse
 
 from fastmcp import FastMCP
 
@@ -49,25 +48,30 @@ async def _reload_tools():
 UI_DIR = Path(__file__).parent / "ui"
 
 
-@_mcp.custom_route("/ui", methods=["GET"])
-async def serve_ui(request: Request):
-    return FileResponse(UI_DIR / "index.html")
+@_mcp.custom_route("/admin", methods=["GET"])
+async def serve_admin(request: Request):
+    return FileResponse(UI_DIR / "admin.html")
 
 
-@_mcp.custom_route("/ui/<path:path>", methods=["GET"])
-async def serve_ui_static(request: Request):
+@_mcp.custom_route("/admin/<path:path>", methods=["GET"])
+async def serve_admin_static(request: Request):
     path = request.path_params["path"]
     file_path = UI_DIR / path
     if file_path.is_file():
         return FileResponse(file_path)
-    return FileResponse(UI_DIR / "index.html")
+    return FileResponse(UI_DIR / "admin.html")
 
 
-# ── /cfg — Token management page ───────────────────────────────────
+# ── /ui & /cfg — Redirects to unified /admin ──────────────────────
+
+@_mcp.custom_route("/ui", methods=["GET"])
+async def redirect_ui(request: Request):
+    return RedirectResponse(url="/admin")
+
 
 @_mcp.custom_route("/cfg", methods=["GET"])
-async def serve_cfg(request: Request):
-    return FileResponse(UI_DIR / "cfg.html")
+async def redirect_cfg(request: Request):
+    return RedirectResponse(url="/admin")
 
 
 # ── Token API (for /cfg page) ──────────────────────────────────────
@@ -203,7 +207,7 @@ async def _main():
 
     print(f"  Web UI : http://localhost:{port}/ui")
     print(f"  MCP    : http://localhost:{port}/mcp (requires Bearer token)")
-    print(f"  Config : http://localhost:{port}/cfg (admin: admin / alta_2025)")
+    print(f"  Admin  : http://localhost:{port}/admin (admin: admin / alta_2025)")
     print(f"  Health : http://localhost:{port}/api/health")
     print(f"  Tools  : {len(await _mcp.list_tools())} registered")
     print()
