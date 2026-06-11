@@ -214,7 +214,7 @@ async function doLogin() {
   try {
     const data = await api('/api/tokens/login', { username, password });
     if (data.error) { errEl.textContent = data.error; return; }
-    session = data.session || data.token || '';
+    session = data.session_id || data.session || data.token || '';
     localStorage.setItem('mcp_session', session);
     showDashboard();
   } catch (e) {
