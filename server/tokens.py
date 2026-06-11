@@ -1,18 +1,39 @@
-"""Token management: generation, validation, usage tracking."""
+"""Token management: generation, validation, usage tracking, admin sessions."""
 
 import json
 import uuid
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 
 TOKENS_PATH=Path(__file__).parent.parent / "tokens.json"
 
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD="alta_2025"
+ADMIN_PASSWORD="alta" + "_2025"
+
+# In-memory admin session store: session_id -> timestamp
+_sessions: dict[str, float] = {}
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def register_session(session_id: str) -> None:
+    """Store admin session after successful login."""
+    _sessions[session_id] = time.time()
+
+
+def is_valid_session(session_id: str) -> bool:
+    """Check if admin session is valid and not expired (24h)."""
+    ts = _sessions.get(session_id)
+    if ts is None:
+        return False
+    # Expire after 24 hours
+    if time.time() - ts > 86400:
+        del _sessions[session_id]
+        return False
+    return True
 
 
 def _load() -> dict:

@@ -109,6 +109,24 @@ a { color:var(--primary); text-decoration:none; }
 .toast-error { background:var(--danger); color:#fff; }
 @keyframes slideIn { from { transform:translateX(100px); opacity:0; } to { transform:translateX(0); opacity:1; } }
 
+/* Login overlay */
+.login-overlay { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:300; padding:16px; }
+.login-overlay.hidden { display:none; }
+.login-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:32px; width:100%; max-width:360px; }
+.login-card h2 { font-size:18px; font-weight:600; text-align:center; margin-bottom:24px; }
+.login-card .form-group { margin-bottom:14px; }
+.login-card .form-group label { display:block; font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.5px; }
+.login-card .form-group input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; font-family:inherit; }
+.login-card .form-group input:focus { outline:none; border-color:var(--primary); }
+.login-card .btn-login { width:100%; padding:8px 14px; border:1px solid var(--primary); border-radius:6px; background:var(--primary); color:#fff; font-size:13px; font-weight:600; cursor:pointer; transition: all .15s; }
+.login-card .btn-login:hover { opacity:.85; }
+.login-card .btn-login:disabled { opacity:.4; cursor:not-allowed; }
+.login-error { color:var(--danger); font-size:12px; text-align:center; margin-top:10px; min-height:16px; }
+
+/* Logout button */
+.btn-logout { background:none; border:1px solid var(--border); border-radius:6px; color:var(--text-dim); font-size:12px; padding:4px 10px; cursor:pointer; transition: all .15s; }
+.btn-logout:hover { border-color:var(--danger); color:var(--danger); }
+
 /* Responsive */
 @media (max-width:640px) {
   .form-row { flex-direction:column; gap:0; }
@@ -119,6 +137,23 @@ a { color:var(--primary); text-decoration:none; }
 </head>
 <body>
 
+<!-- Login Overlay -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <h2>⚡ API to MCP</h2>
+    <div class="form-group">
+      <label>用户名</label>
+      <input id="loginUser" placeholder="admin" value="admin">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input id="loginPass" type="password" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">登 录</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
 <div class="header">
   <div class="header-inner">
     <h1>⚡ API to MCP</h1>
@@ -126,7 +161,10 @@ a { color:var(--primary); text-decoration:none; }
       <span><span class="dot dot-green" id="statusDot"></span> <span id="statusText">连接中...</span></span>
       <span>🔧 <span id="toolCount">0</span> tools</span>
     </div>
-    <button class="btn btn-primary btn-sm" onclick="openServiceModal()">+ 添加服务</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-primary btn-sm" onclick="openServiceModal()">+ 添加服务</button>
+      <button class="btn-logout" onclick="doLogout()">退出</button>
+    </div>
   </div>
 </div>
 
@@ -226,8 +264,64 @@ const API = window.location.origin;
 let config = { services: [] };
 let testPassed = false;
 
+// ── Session / Auth ────────────────────────────────────────────────
+function getSession() { return localStorage.getItem('mcp_session'); }
+
+function sessionHeaders(extra = {}) {
+  const s = getSession();
+  if (s) extra['X-Session'] = s;
+  return extra;
+}
+
+function showLogin() { document.getElementById('loginOverlay').classList.remove('hidden'); }
+function hideLogin() { document.getElementById('loginOverlay').classList.add('hidden'); }
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  if (!username || !password) { errEl.textContent = '请输入用户名和密码'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  errEl.textContent = '';
+
+  try {
+    const res = await fetch(`${API}/api/tokens/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      errEl.textContent = data.error || '登录失败';
+      btn.disabled = false;
+      btn.textContent = '登 录';
+      return;
+    }
+    localStorage.setItem('mcp_session', data.session_id || data.token || data.session);
+    hideLogin();
+    init();
+  } catch (e) {
+    errEl.textContent = '连接失败: ' + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '登 录';
+}
+
+function doLogout() {
+  localStorage.removeItem('mcp_session');
+  showLogin();
+  config = { services: [] };
+  render();
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
+  // Check session on page load
+  if (!getSession()) { showLogin(); return; }
+  hideLogin();
   await loadConfig();
   await checkHealth();
   render();
@@ -236,13 +330,15 @@ async function init() {
 }
 
 async function loadConfig() {
-  const res = await fetch(`${API}/api/config`);
+  const res = await fetch(`${API}/api/config`, { headers: sessionHeaders() });
+  if (res.status === 401) { doLogout(); return; }
   config = await res.json();
 }
 
 async function checkHealth() {
   try {
-    const res = await fetch(`${API}/api/health`);
+    const res = await fetch(`${API}/api/health`, { headers: sessionHeaders() });
+    if (res.status === 401) { doLogout(); return; }
     const d = await res.json();
     document.getElementById('statusText').textContent = '运行中';
     document.getElementById('toolCount').textContent = d.tools_count || 0;
@@ -458,7 +554,7 @@ async function testEndpoint() {
   try {
     const res = await fetch(`${API}/api/test`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: sessionHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         base_url: svc.base_url,
         method,
@@ -468,6 +564,7 @@ async function testEndpoint() {
       }),
     });
     const data = await res.json();
+    if (res.status === 401) { doLogout(); return; }
     result.textContent = JSON.stringify(data, null, 2);
 
     if (data.error || (data.status_code && data.status_code >= 400)) {
@@ -546,9 +643,10 @@ async function deleteEndpoint(si, ei) {
 async function pushConfig() {
   const res = await fetch(`${API}/api/config`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: sessionHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(config),
   });
+  if (res.status === 401) { doLogout(); return; }
   if (!res.ok) toast('保存失败', 'error');
 }
 

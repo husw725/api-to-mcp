@@ -18,7 +18,7 @@ from fastmcp import FastMCP
 
 from server.loader import load_config, save_config, build_tools
 from server.http_client import make_request
-from server.tokens import verify_admin, validate_token, list_tokens, create_token, delete_token, toggle_token
+from server.tokens import verify_admin, validate_token, list_tokens, create_token, delete_token, toggle_token, register_session
 from server.auth_middleware import AuthMiddleware
 
 # ── Globals ────────────────────────────────────────────────────────
@@ -78,6 +78,7 @@ async def token_login(request: Request):
     if verify_admin(data.get("username", ""), data.get("password", "")):
         import secrets
         session_id = secrets.token_hex(16)
+        register_session(session_id)
         return JSONResponse({"status": "ok", "session_id": session_id})
     return JSONResponse({"error": "Invalid credentials"}, status_code=401)
 

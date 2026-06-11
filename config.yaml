@@ -26,6 +26,6 @@ services:
   - name: hangzhou
     method: GET
     path: /?hid=yuhang-101210106
-    description: ''
+    description: Get the weather of yuhang
     parameters: []
     verified: true
